@@ -97,6 +97,7 @@ class Reader():
             os.mkdir(folder)
         with open(folder + '/info.json', 'w') as f:
             json.dump(info, f, indent=4, ensure_ascii=False)
+        os.system('clear')
         print(RED+'Saved!'+ENDC)
 
     def pagedown(self):
