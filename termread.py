@@ -36,12 +36,12 @@ def parse(ebook):
     for item in raw.get_items():
         if item.get_type() == ebooklib.ITEM_DOCUMENT:
             soup = bs4.BeautifulSoup(item.get_content(), 'lxml')
-            if soup.find('h2'):
+            if soup.find(re.compile('h\d+')):
                 # Chapter title.
-                title = soup.h2.text
+                title = soup.find(re.compile('h\d+')).text
                 # Colorized chapter text. 
                 content = soup.text.replace(title, MAGENTA+title+ENDC+GREEN)
-                book.append({title: content+ENDC})
+                book.append({title.replace('\n', '\t'): content+ENDC})
     return book
 
 class Reader():
