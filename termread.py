@@ -81,7 +81,7 @@ class Reader():
             self.pages = pages
             self.currentPage = 0
 
-    # Dispaly the current page.
+    # Display the current page.
     def page(self):
         if 0 <= self.currentPage < len(self.pages['Pages']):
             content = self.pages['Pages'][self.currentPage]
