@@ -13,6 +13,7 @@ shortcuts = {
         'j': 'Pagedown',
         'k': 'Pageup',
         'c': 'Cagalog',
+        'i': 'Image',
         'g': 'Goto',
         'h': 'Help',
         'q': 'Quit'
@@ -31,17 +32,38 @@ def textlen(text):
 
 # Parse ebooks. 
 def parse(ebook):
-    book = []
+    book = {'pages': [], 'images': []}
     raw = epub.read_epub(ebook)
-    for item in raw.get_items():
-        if item.get_type() == ebooklib.ITEM_DOCUMENT:
-            soup = bs4.BeautifulSoup(item.get_content(), 'lxml')
-            if soup.find(re.compile('h\d+')):
-                # Chapter title.
-                title = soup.find(re.compile('h\d+')).text
-                # Colorized chapter text. 
-                content = soup.text.replace(title, MAGENTA+title+ENDC+GREEN)
-                book.append({title.replace('\n', '\t'): content+ENDC})
+    for item in raw.get_items_of_type(ebooklib.ITEM_DOCUMENT):
+        soup = bs4.BeautifulSoup(item.get_content(), 'lxml')
+        if soup.find(re.compile('h\d+')):
+            # Chapter title.
+            title = soup.find(re.compile('h\d+')).text
+            # Colorized chapter text. 
+            content = soup.text.replace(title, MAGENTA+title+ENDC+GREEN)
+            book['pages'].append({title.replace('\n', '\t'): content+ENDC})
+        if soup.img:
+            ls = soup.find_all('img')
+            for image in ls:
+                name = ''
+                # Images in HTML.
+                if image.findNextSibling():
+                    sibling = image.findNextSibling()
+                    if sibling.name == 'p' and sibling.parent == image.parent:
+                        name = sibling.text
+                href = image['src'].replace('../', '')
+                # Images in ebook.
+                img = raw.get_item_with_href(href)
+                content = img.content
+                if name == '':
+                    if soup.find(re.compile('h\d+')):
+                        title = soup.find(re.compile('h\d+')).text
+                        name = img.get_name().replace('images/', title.replace('\n', ' ')+'-')
+                    else:
+                        name = img.get_name().replace('images/', '')
+                else:
+                    name = re.sub('.+\.', name+'.', img.get_name())
+            book['images'].append({name: content.decode('latin1')})
     return book
 
 class Reader():
@@ -55,7 +77,7 @@ class Reader():
         # Null character.
         self.keypress = 0 
         self.title = re.findall('(.+)\.(?:epub)', ebook)[0]
-        if os.path.exists(Reader.home+'/.TermRead/'+self.title):
+        if os.path.exists(Reader.home+'/.TermRead/'+self.title+'/info.json'):
             with open(Reader.home+'/.TermRead/'+self.title+'/info.json') as f:
                 info = json.load(f)
                 self.pages = info['pages']
@@ -66,7 +88,7 @@ class Reader():
             pages = {'Chapters':[], 'Pages':[]}
             # Divide chapters into pages.
             book = parse(ebook)
-            for chapter in book:
+            for chapter in book['pages']:
                 chapterTitle = list(chapter.keys())[0]
                 pages['Chapters'].append({'Title': chapterTitle, 'Page': str(len(pages['Pages']))})
                 lines = [item for item in chapter[chapterTitle].split('\n') if item != '']
@@ -80,6 +102,11 @@ class Reader():
                     pageLines += length
             self.pages = pages
             self.currentPage = 0
+            # Create the folder.
+            os.mkdir(Reader.home+'/.TermRead/'+self.title)
+            # Save the json file of images for the first time.
+            with open(Reader.home+'/.TermRead/'+self.title + '/img.json', 'w') as f:
+                json.dump({'images': book['images']}, f, indent=4, ensure_ascii=False)
 
     # Display the current page.
     def page(self):
@@ -93,8 +120,6 @@ class Reader():
     def save(self):
         info = {'pages': self.pages, 'currentPage': self.currentPage} 
         folder = Reader.home + '/.TermRead/' + self.title
-        if not os.path.exists(folder):
-            os.mkdir(folder)
         with open(folder + '/info.json', 'w') as f:
             json.dump(info, f, indent=4, ensure_ascii=False)
         os.system('clear')
@@ -160,6 +185,28 @@ class Reader():
                     self.currentPage = num
                     break
 
+    # Download images from the ebook.
+    def images(self):
+        if os.path.exists('img'):
+            if os.path.exists('img/'+self.title):
+                print(RED+'Already exists! Please check ./img/'+self.title+'. \nRedirect in 4s.'+ENDC)
+                os.system('sleep 4')
+                return
+        else:
+            os.mkdir('img')
+        os.mkdir('img/'+self.title)
+        os.system('clear')
+        print(RED+'Start downloading images from the book.'+ENDC)
+        with open(Reader.home+'/.TermRead/'+self.title + '/img.json', 'r') as f:
+            img = json.load(f)
+        for image in img['images']:
+            name = list(image.keys())[0]
+            content = image[name].encode('latin1')
+            with open('img/'+self.title+'/'+name, 'wb') as f:
+                f.write(content)
+        print(RED+'Finished! Please check ./img/'+self.title+'. \nRedirect in 4s.'+ENDC)
+        os.system('sleep 4')
+
     def read(self):
         print(CYAN+'Welcome to TermRead! \nPress any key to continue except shortcut keys: '+ENDC)
         for key in shortcuts.keys():
@@ -172,6 +219,8 @@ class Reader():
                 self.pagedown()
             elif self.keypress == 'k':
                 self.pageup()
+            elif self.keypress == 'i':
+                self.images()
             elif self.keypress in ['h', 'g', 'c']:
                 termios.tcsetattr(sys.stdin, termios.TCSADRAIN, Reader.originalSettings)
                 if self.keypress == 'h':
