@@ -187,15 +187,15 @@ class Reader():
 
     # Download images from the ebook.
     def images(self):
+        os.system('clear')
         if os.path.exists('img'):
             if os.path.exists('img/'+self.title):
-                print(RED+'Already exists! Please check ./img/'+self.title+'. \nRedirect in 4s.'+ENDC)
+                print(RED+'Already exists! \nPlease check ./img/'+self.title+'. \nRedirect in 4s.'+ENDC)
                 os.system('sleep 4')
                 return
         else:
             os.mkdir('img')
         os.mkdir('img/'+self.title)
-        os.system('clear')
         print(RED+'Start downloading images from the book.'+ENDC)
         with open(Reader.home+'/.TermRead/'+self.title + '/img.json', 'r') as f:
             img = json.load(f)
@@ -204,7 +204,7 @@ class Reader():
             content = image[name].encode('latin1')
             with open('img/'+self.title+'/'+name, 'wb') as f:
                 f.write(content)
-        print(RED+'Finished! Please check ./img/'+self.title+'. \nRedirect in 4s.'+ENDC)
+        print(RED+'Finished! \nPlease check ./img/'+self.title+'. \nRedirect in 4s.'+ENDC)
         os.system('sleep 4')
 
     def read(self):
