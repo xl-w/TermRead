@@ -36,8 +36,9 @@ def parse(ebook):
     raw = epub.read_epub(ebook)
     for item in raw.get_items_of_type(ebooklib.ITEM_DOCUMENT):
         soup = bs4.BeautifulSoup(item.get_content(), 'lxml')
+        # Chapter title.
+        title = ''
         if soup.find(re.compile('h\d+')):
-            # Chapter title.
             title = soup.find(re.compile('h\d+')).text
             # Colorized chapter text. 
             content = soup.text.replace(title, MAGENTA+title+ENDC+GREEN)
@@ -56,11 +57,10 @@ def parse(ebook):
                 img = raw.get_item_with_href(href)
                 content = img.content
                 if name == '':
-                    if soup.find(re.compile('h\d+')):
-                        title = soup.find(re.compile('h\d+')).text
-                        name = img.get_name().replace('images/', title.replace('\n', ' ')+'-')
-                    else:
+                    if title == '':
                         name = img.get_name().replace('images/', '')
+                    else:
+                        name = img.get_name().replace('images/', title.replace('\n', ' ')+'-')
                 else:
                     name = re.sub('.+\.', name+'.', img.get_name())
             book['images'].append({name: content.decode('latin1')})
