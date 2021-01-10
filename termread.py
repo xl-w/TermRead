@@ -13,11 +13,18 @@ shortcuts = {
         'j': 'Pagedown',
         'k': 'Pageup',
         'c': 'Cagalog',
-        'i': 'Image',
         'g': 'Goto',
         'h': 'Help',
-        'q': 'Quit'
+        'q': 'Quit',
+        'M': 'Mark',
+        'I': 'Image'
         }
+
+# Print with proper formatting.
+def format_print(text, length=16, separator='\t\t'):
+    ls = text.split(separator)
+    template = '{:<%s}      ' % str(length) * len(ls)
+    print(template.format(*ls))
 
 # Detect the length of the given text.
 def textlen(text):
@@ -32,17 +39,22 @@ def textlen(text):
 
 # Parse ebooks. 
 def parse(ebook):
-    book = {'pages': [], 'images': []}
+    book = {'pages': [], 'images': [], 'subsections': []}
     raw = epub.read_epub(ebook)
     for item in raw.get_items_of_type(ebooklib.ITEM_DOCUMENT):
         soup = bs4.BeautifulSoup(item.get_content(), 'lxml')
         # Chapter title.
         title = ''
-        if soup.find(re.compile('h\d+')):
-            title = soup.find(re.compile('h\d+')).text
+        headers = soup.find_all(re.compile('h\d+'))
+        if headers != []:
+            title = headers[0].text
             # Colorized chapter text. 
             content = soup.text.replace(title, MAGENTA+title+ENDC+GREEN, 1)
-            book['pages'].append({re.sub('\s+', '\t', title): content+ENDC})
+            book['pages'].append({re.sub('\s+', '\t\t', title): content+ENDC})
+            if len(headers) > 1:
+                for idx in range(1, len(headers)):
+                    # A list of subsection titles.
+                    book['subsections'].append(headers[idx].text)
         if soup.img:
             ls = soup.find_all('img')
             for image in ls:
@@ -81,19 +93,26 @@ class Reader():
             with open(Reader.home+'/.TermRead/'+self.title+'/info.json') as f:
                 info = json.load(f)
                 self.pages = info['pages']
+                self.markList = info['markList']
                 self.currentPage = info['currentPage']
         else:
             pageText = ''
             pageLines = 0
-            pages = {'Chapters':[], 'Pages':[]}
+            pages = {'Chapters': [], 'Pages': []}
             # Divide chapters into pages.
             book = parse(ebook)
             for chapter in book['pages']:
                 chapterTitle = list(chapter.keys())[0]
                 pages['Chapters'].append({'Title': chapterTitle, 'Page': str(len(pages['Pages']))})
                 text = re.sub('\s+\[(\d+)\]\s+', '[\g<1>]', chapter[chapterTitle])
+                # Divide the main body into lines.
                 lines = [item for item in text.split('\n') if item not in ['', '\r', '\t']]
                 for line in lines:
+                    for subsection in book['subsections']:
+                        if subsection == line:
+                            pages['Chapters'].append({'Title': '\u21B3\t\t'+re.sub('\s+', '\t\t', subsection), 'Page': str(len(pages['Pages']))})
+                            book['subsections'].remove(subsection)
+                            break
                     length = math.ceil(textlen(line)/Reader.columns)
                     if pageLines + length > Reader.rows - 4:
                         pages['Pages'].append(pageText)
@@ -102,6 +121,8 @@ class Reader():
                     pageText += line + '\n'
                     pageLines += length
             self.pages = pages
+            # Initial settings for marks and the current page number.
+            self.markList = []
             self.currentPage = 0
             # Create the folder.
             if not os.path.exists(Reader.home+'/.TermRead/'+self.title):
@@ -120,7 +141,7 @@ class Reader():
 
     # Save the reading progress as a json file.
     def save(self):
-        info = {'pages': self.pages, 'currentPage': self.currentPage} 
+        info = {'pages': self.pages, 'markList': self.markList,  'currentPage': self.currentPage} 
         folder = Reader.home + '/.TermRead/' + self.title
         with open(folder + '/info.json', 'w') as f:
             json.dump(info, f, indent=4, ensure_ascii=False)
@@ -144,19 +165,21 @@ class Reader():
             # Chapter title.
             title = chapter['Title']
             catalog.append(RED+page+ENDC+'\t\t'+CYAN+title+ENDC)
-        catalog.append(RED+'Page range: '+ENDC+'\t'+CYAN+'0-'+str(len(self.pages['Pages'])-1)+ENDC)
-        catalog.append(RED+'Current page: '+ENDC+'\t'+CYAN+str(self.currentPage)+ENDC)
+        appendText = RED+'Page range: '+ENDC+'\t\t'+CYAN+'0-'+str(len(self.pages['Pages'])-1)+ENDC
+        appendText += RED+'\nCurrent page: '+ENDC+'\t\t'+CYAN+str(self.currentPage)+ENDC
         os.system('clear')
         for idx in range(min(Reader.rows-4,len(catalog))):
-            print(catalog[idx])
+            format_print(catalog[idx])
+        print(appendText)
         # Starting page number.
         start = 0
+        tty.setcbreak(sys.stdin)
         while True:
-            inp = input(RED+'Enter q to quit, n and p stand for the next and previous page respectively: '+ENDC)
-            if inp == 'q':
+            keypress = sys.stdin.read(1)[0]
+            if keypress == 'q':
                 break
-            elif inp in ['n', 'p']:
-                if inp == 'n':
+            elif keypress in ['j', 'k']:
+                if keypress == 'j':
                     if start < math.ceil(len(catalog)/(Reader.rows-4)) - 1:
                         start += 1
                 else: 
@@ -164,7 +187,10 @@ class Reader():
                         start -= 1
                 os.system('clear')
                 for idx in range(start*(Reader.rows-4), min((start+1)*(Reader.rows-4),len(catalog))):
-                    print(catalog[idx])
+                    format_print(catalog[idx])
+                print(appendText)
+            else:
+                print(RED+'Press q to quit. Press j to move page down and k to move page up.'+ENDC)
 
     # Display the usage message.
     def help(self):
@@ -172,19 +198,26 @@ class Reader():
         print(RED+'If you want to reparse the ebook, delete that folder under ~/.TermRead. \nShortcut keys:'+ENDC)
         for key in shortcuts.keys():
             print(RED+key+ENDC+'\t\t'+CYAN+shortcuts[key]+ENDC)
+        tty.setcbreak(sys.stdin)
         while True:
-            inp = input(RED+'Enter q to quit: '+ENDC)
-            if inp == 'q':
+            keypress = sys.stdin.read(1)[0]
+            if keypress == 'q':
                 break
+            print(RED+'Press q to quit.'+ENDC)
 
     # Navigate between pages.
     def goto(self):
+        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, Reader.originalSettings)
         while True:
-            inp = input(RED+'Page number: '+ENDC)
-            if re.match('[1-9][0-9]*$', inp):
+            inp = input(RED+'Page number, or enter q to quit: '+ENDC)
+            if inp == 'q':
+                tty.setcbreak(sys.stdin)
+                break
+            elif inp == '0' or re.match('[1-9][0-9]*$', inp):
                 num = eval(re.findall('\d+', inp)[0])
                 if 0 <= num < len(self.pages['Pages']):
                     self.currentPage = num
+                    tty.setcbreak(sys.stdin)
                     break
 
     # Download images from the ebook.
@@ -212,6 +245,39 @@ class Reader():
             print(RED+'Finished! \nPlease check ./img/'+self.title+'. \nRedirect in 3s.'+ENDC)
         os.system('sleep 3')
 
+    # Set a mark.
+    def marks(self):
+        tty.setcbreak(sys.stdin)
+        while True:
+            os.system('clear')
+            print(RED+'Press q to quit, press 0 - 9 to navigate. \nPress a to add a mark at the current page. \nPress d to delete, D to delete all. \nYou can add up 10 marks. \nIndex\t\tPage\t\tText'+ENDC)
+            for mark in self.markList:
+                print(RED+str(self.markList.index(mark))+'\t\t'+str(mark['Page'])+'\t\t'+mark['Text']+ENDC)
+            keypress = sys.stdin.read(1)[0]
+            if keypress == 'q':
+                break
+            elif keypress in ['a', 'd', 'D']:
+                termios.tcsetattr(sys.stdin, termios.TCSADRAIN, Reader.originalSettings)
+                if keypress == 'a':
+                    if len(self.markList) >= 10:
+                        self.markList.pop(0)
+                    inp = input(RED+'Add some text here: '+ENDC)
+                    self.markList.append({'Page': self.currentPage, 'Text': inp})
+                elif keypress == 'd':
+                    inp = input(RED+'Delete: '+ENDC)
+                    if inp.isdigit():
+                        if eval(inp) in range(len(self.markList)):
+                            self.markList.pop(eval(inp))
+                else:
+                    inp = input(RED+'Delete all? Enter y to confirm: '+ENDC)
+                    if inp == 'y':
+                        self.markList = []
+                tty.setcbreak(sys.stdin)
+            elif keypress.isdigit():
+                if eval(keypress) in range(len(self.markList)):
+                    self.currentPage = self.markList[eval(keypress)]['Page']
+                    break
+
     def read(self):
         print(CYAN+'Welcome to TermRead! \nPress any key to continue except shortcut keys: '+ENDC)
         for key in shortcuts.keys():
@@ -224,17 +290,16 @@ class Reader():
                 self.pagedown()
             elif self.keypress == 'k':
                 self.pageup()
-            elif self.keypress == 'i':
+            elif self.keypress == 'c':
+                self.chapters()
+            elif self.keypress == 'h':
+                self.help()
+            elif self.keypress == 'g':
+                self.goto()
+            elif self.keypress == 'M':
+                self.marks()
+            elif self.keypress == 'I':
                 self.images()
-            elif self.keypress in ['h', 'g', 'c']:
-                termios.tcsetattr(sys.stdin, termios.TCSADRAIN, Reader.originalSettings)
-                if self.keypress == 'h':
-                    self.help()
-                elif self.keypress == 'g':
-                    self.goto()
-                else:
-                    self.chapters()
-                tty.setcbreak(sys.stdin)
             os.system('clear')
             self.page()
         self.save()
