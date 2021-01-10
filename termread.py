@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import re, os, tty, sys, termios, json, math 
+import re, os, tty, sys, termios, json, math
 
 # ANSI escape codes.
 ENDC = '\033[0m'
@@ -104,10 +104,19 @@ class Reader():
             for chapter in book['pages']:
                 chapterTitle = list(chapter.keys())[0]
                 pages['Chapters'].append({'Title': chapterTitle, 'Page': str(len(pages['Pages']))})
-                text = re.sub('\s+\[(\d+)\]\s+', '[\g<1>]', chapter[chapterTitle])
+                text = chapter[chapterTitle]
                 # Divide the main body into lines.
                 lines = [item for item in text.split('\n') if item not in ['', '\r', '\t']]
+                for item in lines:
+                    if re.match('\[\d+\]$', item):
+                        idx = lines.index(item)
+                        lines[idx-1] += item + lines[idx+1]
+                        lines[idx+1] = ''
+                        lines[idx] = ''
                 for line in lines:
+                    # Empty string.
+                    if not line:
+                        continue
                     for subsection in book['subsections']:
                         if subsection == line:
                             pages['Chapters'].append({'Title': '\u21B3\t\t'+re.sub('\s+', '\t\t', subsection), 'Page': str(len(pages['Pages']))})
