@@ -41,8 +41,8 @@ def parse(ebook):
         if soup.find(re.compile('h\d+')):
             title = soup.find(re.compile('h\d+')).text
             # Colorized chapter text. 
-            content = soup.text.replace(title, MAGENTA+title+ENDC+GREEN)
-            book['pages'].append({title.replace('\n', '\t'): content+ENDC})
+            content = soup.text.replace(title, MAGENTA+title+ENDC+GREEN, 1)
+            book['pages'].append({re.sub('\s+', '\t', title): content+ENDC})
         if soup.img:
             ls = soup.find_all('img')
             for image in ls:
@@ -91,7 +91,8 @@ class Reader():
             for chapter in book['pages']:
                 chapterTitle = list(chapter.keys())[0]
                 pages['Chapters'].append({'Title': chapterTitle, 'Page': str(len(pages['Pages']))})
-                lines = [item for item in chapter[chapterTitle].split('\n') if item != '']
+                text = re.sub('\s+\[(\d+)\]\s+', '[\g<1>]', chapter[chapterTitle])
+                lines = [item for item in text.split('\n') if item not in ['', '\r', '\t']]
                 for line in lines:
                     length = math.ceil(textlen(line)/Reader.columns)
                     if pageLines + length > Reader.rows - 4:
@@ -103,7 +104,8 @@ class Reader():
             self.pages = pages
             self.currentPage = 0
             # Create the folder.
-            os.mkdir(Reader.home+'/.TermRead/'+self.title)
+            if not os.path.exists(Reader.home+'/.TermRead/'+self.title):
+                os.mkdir(Reader.home+'/.TermRead/'+self.title)
             # Save the json file of images for the first time.
             with open(Reader.home+'/.TermRead/'+self.title + '/img.json', 'w') as f:
                 json.dump({'images': book['images']}, f, indent=4, ensure_ascii=False)
@@ -145,7 +147,7 @@ class Reader():
         catalog.append(RED+'Page range: '+ENDC+'\t'+CYAN+'0-'+str(len(self.pages['Pages'])-1)+ENDC)
         catalog.append(RED+'Current page: '+ENDC+'\t'+CYAN+str(self.currentPage)+ENDC)
         os.system('clear')
-        for idx in range(Reader.rows-4):
+        for idx in range(min(Reader.rows-4,len(catalog))):
             print(catalog[idx])
         # Starting page number.
         start = 0
@@ -191,21 +193,24 @@ class Reader():
         if os.path.exists('img'):
             if os.path.exists('img/'+self.title):
                 print(RED+'Already exists! \nPlease check ./img/'+self.title+'. \nRedirect in 4s.'+ENDC)
-                os.system('sleep 4')
+                os.system('sleep 3')
                 return
         else:
             os.mkdir('img')
-        os.mkdir('img/'+self.title)
-        print(RED+'Start downloading images from the book.'+ENDC)
         with open(Reader.home+'/.TermRead/'+self.title + '/img.json', 'r') as f:
             img = json.load(f)
+        os.mkdir('img/'+self.title)
+        print(RED+'Start downloading images from the book.'+ENDC)
         for image in img['images']:
             name = list(image.keys())[0]
             content = image[name].encode('latin1')
             with open('img/'+self.title+'/'+name, 'wb') as f:
                 f.write(content)
-        print(RED+'Finished! \nPlease check ./img/'+self.title+'. \nRedirect in 4s.'+ENDC)
-        os.system('sleep 4')
+        if img['images'] == []:
+            print(RED+'Finished! \nNo image found.'+ENDC)
+        else:
+            print(RED+'Finished! \nPlease check ./img/'+self.title+'. \nRedirect in 3s.'+ENDC)
+        os.system('sleep 3')
 
     def read(self):
         print(CYAN+'Welcome to TermRead! \nPress any key to continue except shortcut keys: '+ENDC)
