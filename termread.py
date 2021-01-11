@@ -104,9 +104,8 @@ class Reader():
             for chapter in book['pages']:
                 chapterTitle = list(chapter.keys())[0]
                 pages['Chapters'].append({'Title': chapterTitle, 'Page': str(len(pages['Pages']))})
-                text = chapter[chapterTitle]
                 # Divide the main body into lines.
-                lines = [item for item in text.split('\n') if item not in ['', '\r', '\t']]
+                lines = chapter[chapterTitle].split('\n')
                 for item in lines:
                     if re.match('\[\d+\]$', item):
                         idx = lines.index(item)
