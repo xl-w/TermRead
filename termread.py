@@ -48,6 +48,9 @@ def parse(ebook):
         headers = soup.find_all(re.compile('h\d+'))
         if headers != []:
             title = headers[0].text
+            # Handle <br/>.
+            for br in soup.select('br'):
+                br.replace_with('\n')
             # Colorized chapter text. 
             content = soup.text.replace(title, MAGENTA+title+ENDC+GREEN, 1)
             book['pages'].append({re.sub('\s+', '\t\t', title): content+ENDC})

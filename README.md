@@ -14,7 +14,7 @@ TermRead
 python3 termread.py <path-to-epub>
 ```
 
-Put that alias `td=python3 termread.py` in your startup file is highly recommended.
+Putting that alias `td=python3 termread.py` in your startup file is highly recommended.
 
 ## Shortcuts
 
