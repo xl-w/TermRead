@@ -2,6 +2,8 @@
 import re, os, tty, sys, termios, json, math
 
 # ANSI escape codes.
+HIDE = '\x1b[?25l'
+SHOW = '\x1b[?25h'
 ENDC = '\033[0m'
 RED = '\033[1;31m'
 CYAN = '\033[1;36m'
@@ -157,7 +159,7 @@ class Reader():
         with open(folder + '/info.json', 'w') as f:
             json.dump(info, f, indent=4, ensure_ascii=False)
         os.system('clear')
-        print(RED+'Saved!'+ENDC)
+        print(RED+'\nSaved!'+ENDC)
 
     def pagedown(self):
         if self.currentPage < len(self.pages['Pages']) - 1:
@@ -294,6 +296,8 @@ class Reader():
         for key in shortcuts.keys():
             print(RED+key+ENDC+'\t\t'+CYAN+shortcuts[key]+ENDC)
         tty.setcbreak(sys.stdin)
+        # Hide cursor.
+        print(HIDE)
         # Keypress 'q' to quit.
         while self.keypress != chr(113):
             self.keypress = sys.stdin.read(1)[0]
@@ -314,6 +318,8 @@ class Reader():
             os.system('clear')
             self.page()
         self.save()
+        # Show cursor.
+        print(SHOW)
         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, Reader.originalSettings)
 
 def main():
